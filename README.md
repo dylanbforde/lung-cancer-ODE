@@ -1,7 +1,14 @@
 ## Set-up Steps
 1. Install UV: https://github.com/astral-sh/uv
-2. Run `uv sync` in project directory
-3. if using VSCode, you will need to select .venv as kernel for notebooks.
+2. Install git: https://git-scm.com/downloads
+3. Navigate to where you want the folder
+4. Run `git clone https://github.com/dylanbforde/lung-cancer-ODE.git` in your terminal.
+5. Run `uv sync` in project directory
+6. Next run `source .venv/bin/activate`
+
+If you are using VSCode, you will need to select .venv as kernel for notebooks.
+
+---
 
 ## ODE References
 
