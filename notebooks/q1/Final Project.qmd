@@ -1,0 +1,329 @@
+---
+title: "Final Project"
+format: pdf
+editor: visual
+---
+
+## Final Project
+
+```{r, load_libraries}
+#| message: false
+#| warning: false
+# load required packages
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("TCGAbiolinks")
+library(TCGAbiolinks)
+library(survival)
+library(survminer)
+library(dplyr)
+library(glmnet)
+library(survcomp)
+```
+
+```{r, download_rawdata}
+#| message: false
+#| warning: false
+# download dataset
+query_expr <- GDCquery(
+  project = "TCGA-LUAD",
+  data.category = "Transcriptome Profiling",
+  data.type = "Gene Expression Quantification",
+  workflow.type = "STAR - Counts"
+)
+
+# GDCdownload(query_expr)
+# luad_expr <- GDCprepare(query_expr)
+
+# download clinical data 
+luad_clinical <- GDCquery_clinic(project = "TCGA-LUAD", type = "clinical")
+```
+
+```{r}
+#| message: false
+#| warning: false
+# set path
+expr_path <- "/Users/afra/Desktop/MEIN40330-AI for Personalised Medicine/Final Project/Final Project/TCGA.LUAD.sampleMap_HiSeqV2.gz"
+
+# read UCSC Xena FPKM expression data
+expr_data <- read.delim(expr_path, header = TRUE, row.names = 1, check.names = FALSE)
+
+# keep only tumor samples ending with "-01"
+tumor_samples <- grep("-01$", colnames(expr_data), value = TRUE)
+expr_data <- expr_data[, tumor_samples]
+
+# shorten sample IDs to match clinical barcodes (first 12 characters)
+colnames(expr_data) <- substr(colnames(expr_data), 1, 12)
+```
+
+```{r}
+#| message: false
+#| warning: false
+# match clinical data
+sample_ids <- colnames(expr_data)
+clinical_data <- luad_clinical[luad_clinical$bcr_patient_barcode %in% sample_ids,  ]
+
+# ensure same order
+expr_data <- expr_data[, sample_ids %in% clinical_data$bcr_patient_barcode]
+clinical_data <- clinical_data[match(colnames(expr_data), clinical_data$bcr_patient_barcode), ]
+```
+
+#### 1. Build Surv() object (survival time + status)
+
+```{r}
+#| message: false
+#| warning: false
+# survival time
+clinical_data$time <- ifelse(is.na(clinical_data$days_to_death ),
+                              clinical_data$days_to_last_follow_up,
+                              clinical_data$days_to_death)
+
+# survival status: 1 = dead, 0 = alive
+clinical_data$status <- ifelse(clinical_data$vital_status == "Dead", 1, 0)
+
+# remove NAs
+valid_idx <- which(!is.na(clinical_data$time) & !is.na(clinical_data$status))
+expr_data <- expr_data[, valid_idx]
+clinical_data <- clinical_data[valid_idx, ]
+```
+
+#### 2. Cox regression analysis & Top 10 genes
+
+```{r}
+#| message: false
+#| warning: false
+# transpose expression matrix: rows = samples, columns = genes
+expr_t <- t(expr_data)
+
+# combine expression with survival info
+combine_data <- cbind(clinical_data[, c("time", "status")], expr_t)
+
+# remove samples with missing survival info
+combine_data <- na.omit(combine_data)
+
+# filter out low-expression genes, remove genes expressed in <10% of samples
+expr_matrix <- combine_data[, -(1:2)]
+keep_genes <- apply(expr_matrix, 2, function(x) mean(x > 0) > 0.1)
+combine_data_filtered <- cbind(combine_data[, 1:2], expr_matrix[, keep_genes])
+colnames(combine_data_filtered) <- make.names(colnames(combine_data_filtered), unique = TRUE)
+
+# initialize result container
+cox_results <- data.frame(Gene = character(), HR = numeric(), p.value = numeric())
+
+# Loop over all genes
+cat("Starting with", ncol(combine_data_filtered) - 2, "genes...\n")
+
+for (gene in colnames(combine_data_filtered)[-(1:2)]) {
+  gene <- trimws(gene)
+  formula <- as.formula(paste0("Surv(time, status) ~ `", gene, "`"))
+
+  fit <- tryCatch({
+    coxph(formula, data = combine_data_filtered)
+  }, error = function(e) {
+    message("Skipped gene (error): ", gene, " — ", e$message)
+    return(NULL)
+  })
+
+  if (!is.null(fit)) {
+    summary_fit <- summary(fit)
+    cox_results <- rbind(cox_results, data.frame(
+      Gene = gene,
+      HR = round(summary_fit$coefficients[1, 2], 3),
+      p.value = summary_fit$coefficients[1, 5]
+    ))
+  }
+}
+
+# sort by p-value
+cox_results <- cox_results %>% arrange(p.value)
+
+# top 10 genes
+top10_genes <- head(cox_results, 10)
+print(top10_genes)
+
+# save results 
+write.csv(cox_results, "cox_results_all_genes.csv", row.names = FALSE)
+write.csv(top10_genes, "cox_results_top10.csv", row.names = FALSE)
+```
+
+#### 3. Kaplan-Meier
+
+```{r}
+#| message: false
+#| warning: false
+# loop over top 10 genes
+for (gene in top10_genes) {
+  expr_gene <- combine_data_filtered[[gene]]
+  
+  surv_df <- data.frame(
+    time = combine_data_filtered$time,
+    status = combine_data_filtered$status,
+    gene_expr = expr_gene
+  )
+  
+  surv_df <- na.omit(surv_df)
+  
+  if (length(unique(surv_df$gene_expr)) < 2) {
+    message("Skipped gene (constant expression): ", gene)
+    next
+  }
+  
+  surv_df$group <- ifelse(surv_df$gene_expr > median(surv_df$gene_expr), "High", "Low")
+  
+  if (length(unique(surv_df$group)) < 2) {
+    message("Skipped gene (single group after split): ", gene)
+    next
+  }
+  
+  fit <- tryCatch({
+    survfit(Surv(time, status) ~ group, data = surv_df)
+  }, error = function(e) {
+    message("Survfit failed for gene ", gene, ": ", e$message)
+    return(NULL)
+  })
+  
+  if (!is.null(fit)) {
+    print(paste("Plotting KM curve for:", gene))
+    plot_km <- ggsurvplot(
+      fit,
+      data = surv_df,
+      title = paste("Kaplan-Meier Curve -", gene),
+      pval = TRUE,
+      risk.table = TRUE,
+      xlab = "Time (days)",
+      legend.labs = c("High", "Low"),
+      palette = c("#E64B35", "#4DBBD5")
+    )
+
+    print(plot_km)  # ✅ ensure it shows in RStudio
+
+    ggsave(
+      filename = paste0("KM_", gene, ".pdf"),
+      plot = plot_km$plot,
+      width = 6,
+      height = 5
+    )
+  }
+}
+
+```
+
+#### 4. **Lasso-Cox**
+
+To select the best regularization parameter (lambda), we performed 10-fold cross-validation.
+
+1.  The cross-validation plot showed that the model reached the minimum deviance at log(λ) ≈ -3.5.
+
+2.  At this lambda, the model selected 88 non-zero coefficients. These genes were considered to have the strongest association with patient survival.
+
+```{r}
+#| message: false
+#| warning: false
+set.seed(2025)
+# filter genes with p < 0.01
+signif_genes <- cox_results$Gene[cox_results$p.value < 0.01]
+
+# Remove samples with time <= 0
+combine_data_filtered <- combine_data_filtered[combine_data_filtered$time > 0, ]
+
+# construct matrix
+x <- as.matrix(combine_data_filtered[, signif_genes])  # predictor matrix
+y <- Surv(combine_data_filtered$time, combine_data_filtered$status)  # response
+
+# Lasso-Cox
+cv_fit <- cv.glmnet(x, y, family = "cox", alpha = 1, nfolds = 10)
+best_lambda <- cv_fit$lambda.min
+plot(cv_fit)
+
+lasso_model <- glmnet(x, y, family = "cox", alpha = 1, lambda = best_lambda)
+coef_df <- as.data.frame(as.matrix(coef(lasso_model)))
+selected_genes <- rownames(coef_df)[coef_df[, 1] != 0]
+
+
+cat("Genes selected by Lasso-Cox model:\n")
+print(selected_genes)
+```
+
+Based on the Lasso-Cox survival regression model, a gene expression-driven survival risk score was constructed.
+
+1.  After grouping patients according to their median risk score, the Kaplan-Meier survival curve showed a significant survival difference between the two groups (p \< 0.0001).
+
+2.  The survival rate of patients in the high-risk group decreased significantly, indicating that the model has good prognostic stratification ability in LUAD patients and may be helpful in formulating individualised treatment strategies.
+
+```{r}
+#| message: false
+#| warning: false
+set.seed(2025)
+# risk score
+risk_score <- predict(lasso_model, newx = x, type = "link")
+
+# survival analysis + KM curve grouped by risk
+combine_risk <- data.frame(
+  time = combine_data_filtered$time,
+  status = combine_data_filtered$status,
+  risk_score = as.numeric(risk_score)
+)
+combine_risk$risk_group <- ifelse(combine_risk$risk_score > median(combine_risk$risk_score), "High", "Low")
+
+fit <- survfit(Surv(time, status) ~ risk_group, data = combine_risk)
+
+# plot KM
+library(survminer)
+ggsurvplot(
+  fit,
+  data = combine_risk,
+  pval = TRUE,
+  risk.table = TRUE,
+  title = "Kaplan-Meier Curve by Lasso-based Risk Score",
+  palette = c("#E64B35", "#4DBBD5")
+)
+```
+
+Each coefficient reflects the direction and strength of association between gene expression and survival risk.
+
+-   A positive coefficient means that higher expression is associated with higher risk (worse prognosis).
+
+-   A negative coefficient indicates that higher expression may be protective.
+
+For example, CD200R1L has the strongest negative coefficient (–0.22), suggesting it may be a protective marker in LUAD. On the other hand, genes like MAPK1IP1L and AIPL1 show positive coefficients, meaning they may be linked to poor survival. Interestingly, PITX3 also appears here, which is consistent with our earlier univariate Cox results.
+
+```{r}
+#| message: false
+#| warning: false
+# Check the Lasso coefficient for each gene
+coef_matrix <- as.matrix(coef(lasso_model))
+coef_table <- data.frame(
+  Gene = rownames(coef_matrix),
+  Coefficient = coef_matrix[, 1]
+)
+coef_table <- coef_table[coef_table$Coefficient != 0, ]  # filter non-zero
+coef_table <- coef_table[order(abs(coef_table$Coefficient), decreasing = TRUE), ]
+head(coef_table, 10)
+
+risk_score_df <- data.frame(
+  sample = rownames(x),
+  risk_score = as.numeric(risk_score),
+  risk_group = combine_risk$risk_group
+)
+# save the file
+write.csv(risk_score_df, "lasso_risk_scores.csv", row.names = FALSE)
+```
+
+#### 5. C-index（Concordance Index）
+
+To evaluate the performance of the Lasso-Cox model, we computed the concordance index (C-index).
+
+-   The model achieved a C-index of 0.847, indicating strong predictive ability.
+
+-   This suggests that the risk scores generated by the model are highly consistent with actual patient survival outcomes.
+
+```{r}
+#| message: false
+#| warning: false
+# Concordance Index (C-index)
+c_index <- concordance.index(x = risk_score,
+                             surv.time = combine_risk$time,
+                             surv.event = combine_risk$status,
+                             method = "noether")
+c_index$c.index
+```
