@@ -21,3 +21,7 @@ https://github.com/johnbachman/depmap_analysis
 #### Omics Integration
 https://github.com/fraenkel-lab/OmicsIntegrator2
 https://github.com/bowang-lab/IntegrAO
+
+#### Regulatory networks
+https://github.com/Murali-group/Beeline
+https://github.com/asor-1/Gene-Regulatory-Network-Dynamics-Analysis
