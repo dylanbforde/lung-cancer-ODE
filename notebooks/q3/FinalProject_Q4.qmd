@@ -1,0 +1,272 @@
+---
+title: "Final Project"
+format: pdf
+editor: source
+author: "Group 4"
+---
+
+## MEIN40330 - Final Project -- Question 4:
+
+#### Can you suggest potential new drug targets using LINCS data? Or based on DepMap data? Or both?
+
+Objective - identify genes or pathways that are potential drug targets for LUAD, meaning they are critical for cancer cell survival / proliferation (from DepMap), show altered expression / mutation in LUAD patients (from TCGA-LUAD), and/or exhibit functional relevance when perturbed (from LINCS)
+
+#### Drug Target Criteria
+
+-   genes with high expression or frequent mutations in TCGA-LUAD (indicating relevance to LUAD biology).
+-   genes with high dependency scores in LUAD cell lines in DepMap (indicating essential for cancer cell survival)
+-   genes whose perturbation in LINCS data alters LUAD-relevant phenotypes (e.g., reduced cell viability or proliferation).
+
+```{r, load_libraries}
+#| message: false
+#| warning: false
+# load required packages
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("TCGAbiolinks")
+# BiocManager::install("survcomp")
+# BiocManager::install("cmapR")
+# Install devtools if not already installed
+if (!requireNamespace("devtools", quietly = TRUE)) {
+  install.packages("devtools")
+}
+# Install cmapR from GitHub
+devtools::install_github("cmap/cmapR")
+# Install other useful packages
+install.packages(c("BiocManager", "dplyr", "tibble", "ggplot2"))
+BiocManager::install("rhdf5")  # Required for reading HDF5 files in LINCS
+BiocManager::install("DESeq2")  
+BiocManager::install("org.Hs.eg.db")
+library(TCGAbiolinks)
+library(survival)
+library(survminer)
+library(dplyr)
+library(readr)
+library(tidyr)
+library(glmnet)
+library(survcomp)
+library(cmapR)
+library(SummarizedExperiment)
+library(DESeq2)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+```
+
+```{r, download_rawdata}
+#| message: false
+#| warning: false
+# download dataset
+# query_expr <- GDCquery(project = "TCGA-LUAD", data.category = "Transcriptome Profiling",
+#  data.type = "Gene Expression Quantification", workflow.type="STAR - Counts"
+#)
+# GDCdownload(query_expr)
+# luad_expr <- GDCprepare(query_expr)
+
+# Filter for tumor versus normal samples
+sample_types <- c("Primary Tumor", "Solid Tissue Normal")
+counts <- assay(luad_expr)
+colData <- colData(luad_expr)
+keep <- colData$sample_type %in% c("Primary Tumor", "Solid Tissue Normal")
+counts <- counts[, keep]
+colData <- colData[keep, ]
+
+# DEG analysis
+dds <- DESeqDataSetFromMatrix(countData=round(counts), colData=colData, design = ~ sample_type)
+dds <- DESeq(dds)
+res <- results(dds, contrast = c("sample_type", "Primary Tumor", "Solid Tissue Normal"))
+
+# Filter for significant DEGs
+tcga_degs <- rownames(res)[!is.na(res$padj) & res$padj < 0.05 & abs(res$log2FoldChange) > 1]
+
+# Strip version numbers from Ensembl IDs
+tcga_degs_clean <- sub("\\..*", "", tcga_degs)
+
+# Map to gene symbols
+tcga_genes <- mapIds(org.Hs.eg.db, keys = tcga_degs_clean, keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first")
+print(tcga_genes)
+length(tcga_genes)
+```
+
+```{r, download_lincs}
+#| message: false
+#| warning: false
+# Download Level 5 data (large file, ~20 GB)
+#download.file(
+#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series271/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx.gz",
+#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx.gz"
+#)
+
+# Download metadata files
+#download.file(
+#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_gene_info.txt.gz",
+#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_gene_info.txt.gz"
+#)
+#download.file(
+#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_cell_info.txt.gz",
+#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_cell_info.txt.gz"
+#)
+#download.file(
+#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_pert_info.txt.gz",
+#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_pert_info.txt.gz"
+#)
+#download.file(
+#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_sig_info.txt.gz",
+#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_sig_info.txt.gz"
+#)
+
+# Unzip files
+system("gunzip ../../*.gz")
+```
+
+```{r, load_metadata}
+# Load metadata
+gene_info <- read.delim("../../dat/GSE92742_Broad_LINCS_gene_info.txt", stringsAsFactors = FALSE)
+cell_info <- read.delim("../../dat/GSE92742_Broad_LINCS_cell_info.txt", stringsAsFactors = FALSE)
+pert_info <- read.delim("../../dat/GSE92742_Broad_LINCS_pert_info.txt", stringsAsFactors = FALSE)
+sig_info <- read.delim("../../dat/GSE92742_Broad_LINCS_sig_info.txt", stringsAsFactors = FALSE)
+
+# validate file contents
+library(dplyr)
+colnames(sig_info)
+
+# Filter lung cancer cell lines
+lung_cells <- cell_info %>% filter(grepl("lung", tolower(primary_site))) %>% pull(cell_id)
+
+# Filter shRNA/drug signatures
+lung_signatures <- sig_info %>% filter(cell_id %in% lung_cells & pert_type %in% c("trt_sh", "trt_cp"))
+```
+
+```{r, identify_cell_lines}
+# Filter for lung cancer cell lines
+lung_cell_lines <- cell_info %>%
+  filter(grepl("lung", tolower(primary_site))) %>%
+  pull(cell_id)
+print(lung_cell_lines)  # Examples: A549, NCIH1299, HCC827
+```
+
+```{r, filter_signatures}
+# Filter signatures for lung cancer cell lines and shRNA/drug perturbations
+lung_signatures <- sig_info %>%
+  filter(cell_id %in% lung_cell_lines & pert_type %in% c("trt_sh", "trt_cp")) %>%
+  select(sig_id, cell_id, pert_id, pert_type, pert_iname)
+head(lung_signatures)
+```
+
+```{r, load_level_five_data}
+# Load Level 5 data for specific signatures
+gctx_file <- "../../dat/GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx"
+lung_sig_ids <- lung_signatures$sig_id
+ds <- parse_gctx(gctx_file, cid = lung_sig_ids)  # Load only lung cancer signatures
+```
+
+```{r, map_gene_ids}
+# Map Entrez IDs to gene symbols
+gene_ids <- ds@rid  # Row IDs (Entrez IDs)
+gene_symbols <- gene_info %>%
+  filter(pr_gene_id %in% gene_ids) %>%
+  select(pr_gene_id, pr_gene_symbol)
+head(gene_symbols)
+```
+
+```{r, analyze_signatures}
+# Filter for shRNA sigs
+shRNA_signatures <- lung_signatures %>%
+  filter(pert_type == "trt_sh")
+shRNA_sig_ids <- shRNA_signatures$sig_id
+
+# Subset GCT for shRNA signatures
+shRNA_ds <- parse_gctx(gctx_file, cid = shRNA_sig_ids)
+saveRDS(shRNA_ds, "shRNA_lung_signatures.rds")
+
+# Next for drug perturbations
+drug_signatures <- lung_signatures %>%
+  filter(pert_type == "trt_cp" & pert_iname %in% c("gefitinib", "erlotinib"))  # Example drugs
+drug_sig_ids <- drug_signatures$sig_id
+
+# Subset GCT for drug signatures
+drug_ds <- parse_gctx(gctx_file, cid = drug_sig_ids)
+saveRDS(drug_ds, "drug_lung_signatures.rds")
+```
+
+```{r, id_sig_genes}
+# Extract z-scores for shRNA signatures
+z_scores <- shRNA_ds@mat
+significant_genes <- apply(z_scores, 1, function(x) any(abs(x) > 2))  # Genes with |z| > 2
+sig_gene_ids <- shRNA_ds@rid[significant_genes]
+sig_gene_symbols <- gene_info %>%
+  filter(pr_gene_id %in% sig_gene_ids) %>%
+  pull(pr_gene_symbol)
+print(head(sig_gene_symbols))  # Candidate genes
+# Candidate genes are: "DDR1"   "PAX8"   "GUCA1A" "EPHB3"  "ESRRA"  "TRADD"
+```
+
+
+```{r, filter_depmap_}
+# Unzip files
+# system("gunzip ../../dat/CRISPRGeneEffect.csv.xz")
+gene_effect <- read_csv("../../dat/CRISPRGeneEffect.csv")
+#colnames(gene_effect)[1:10]  # Should include DepMap_ID and gene columns like TP53 (7157)
+#head(gene_effect)
+model_data <- read_csv("../../dat/Model.csv")
+#colnames(model_data)
+#head(model_data)
+
+# Filter for LUAD cell lines
+luad_cells <- model_data %>% 
+  filter(grepl("lung", tolower(OncotreeLineage)) & 
+         grepl("adenocarcinoma|non-small cell lung", tolower(OncotreeSubtype))) %>% 
+  pull(ModelID)
+
+# Print the LUAD cell line IDs
+cat("Number of LUAD cell lines:", length(luad_cells), "\n")
+print("LUAD Cells:")
+print(luad_cells)
+
+# Verify: 
+model_data %>% 
+  filter(ModelID %in% luad_cells) %>% 
+  select(ModelID, CellLineName, OncotreeLineage, OncotreeSubtype)
+```
+```{r, crispr_gene_effect}
+# Subset gene effect data for LUAD cell lines
+gene_effect <- read_csv("../../dat/CRISPRGeneEffect.csv")
+colnames(gene_effect)[1] <- "DepMap_ID"
+
+# Inspect the first few column names
+colnames(gene_effect)[1:10]  # Should include DepMap_ID and gene columns like TP53 (7157)
+head(gene_effect)
+luad_gene_effect <- gene_effect %>% 
+  filter(DepMap_ID %in% luad_cells)
+
+# Identify essential genes (CERES < -0.5 in >50% of LUAD cell lines)
+essential_genes <- luad_gene_effect %>% 
+  select(-DepMap_ID) %>% 
+  summarise_all(~ mean(. < -0.5, na.rm = TRUE)) %>% 
+  pivot_longer(everything(), names_to = "gene", values_to = "prop_essential") %>% 
+  # filter(prop_essential > 0.5) %>% 
+  filter(prop_essential > 0.6 & prop_essential < 0.9) %>%  # Adjusted range
+  mutate(gene_symbol = sub(" \\(.*\\)", "", gene)) %>% 
+  distinct(gene_symbol, .keep_all = TRUE)  # Remove duplicates
+
+# Print the top essential genes
+print(head(essential_genes))
+
+write_csv(essential_genes, "luad_essential_genes.csv")
+
+```
+
+
+```{r, interpret_results}
+corrected_essential_genes <- read_csv("luad_essential_genes.csv")
+lincs_genes <- c("DDR1","PAX8","GUCA1A","EPHB3","ESRRA","TRADD")  # From LINCS
+# tcga_degs <- c("KRAS", "CDK6")   # From TCGA-LUAD
+candidate_targets <- intersect(corrected_essential_genes$gene_symbol, intersect(lincs_genes, names(tcga_genes)))
+print(candidate_targets)
+```
+```{r, visualizations}
+library(ggplot2)
+ggplot(degs, aes(x = log2FoldChange, y = -log10(padj))) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "TCGA-LUAD DEGs")
+```
