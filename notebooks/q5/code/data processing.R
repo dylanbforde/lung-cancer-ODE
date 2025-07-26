@@ -9,7 +9,7 @@ library(maftools)
 # ===================== STEP 1: LOAD EXPRESSION DATA FROM UCSC XENA =====================
 
 # Define path to UCSC Xena expression matrix
-expr_path <- "C:/Users/mahen/Documents/TCGA.LUAD.sampleMap_HiSeqV2/HiSeqV2"
+expr_path <- "../../dat/TCGA.LUAD.sampleMap_HiSeqV2"
 
 # Check file existence before reading
 if (!file.exists(expr_path)) {

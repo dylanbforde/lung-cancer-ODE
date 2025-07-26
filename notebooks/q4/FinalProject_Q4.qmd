@@ -90,32 +90,8 @@ length(tcga_genes)
 ```{r, download_lincs}
 #| message: false
 #| warning: false
-# Download Level 5 data (large file, ~20 GB)
-#download.file(
-#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series271/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx.gz",
-#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx.gz"
-#)
-
-# Download metadata files
-#download.file(
-#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_gene_info.txt.gz",
-#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_gene_info.txt.gz"
-#)
-#download.file(
-#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_cell_info.txt.gz",
-#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_cell_info.txt.gz"
-#)
-#download.file(
-#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_pert_info.txt.gz",
-#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_pert_info.txt.gz"
-#)
-#download.file(
-#  url = "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE92nnn/GSE92742/suppl/GSE92742_Broad_LINCS_sig_info.txt.gz",
-#  destfile = "~/LINCS_data/GSE92742_Broad_LINCS_sig_info.txt.gz"
-#)
-
 # Unzip files
-system("gunzip ../../*.gz")
+# system("gunzip ../../*.gz")
 ```
 
 ```{r, load_metadata}

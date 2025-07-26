@@ -3,7 +3,7 @@
 # Author: Group 4 - Complete LUAD Treatment Selection with Real ECOG Scores
 # =============================================================================
 
-setwd("C:/Users/mahen/Desktop/Personalised Medicine/final project/finalproject/R")
+
 
 library(dplyr)
 library(readr)

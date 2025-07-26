@@ -1,1 +1,39 @@
+# Python environment
 uv.lock
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Large data files (>10MB)
+GSE131907_Lung_Cancer_raw_UMI_matrix.txt
+GSE131907_Lung_Cancer_cell_annotation.txt
+GSE92742_Broad_LINCS_pert_info.txt
+
+# Large expression data files in specific locations
+notebooks/q3/GSE131907_Lung_Cancer_raw_UMI_matrix.txt
+notebooks/q3/GSE131907_Lung_Cancer_cell_annotation.txt
+notebooks/q3/GSE131907_Lung_Cancer_raw_UMI_matrix.h5ad
+
+# Beeline large files
+Beeline/data/GSE131907/
+Beeline/outputs/
+Beeline/inputs/q3_data/LungCancer/ExpressionData.csv
+Beeline/inputs/q3_data/LungCancer_small/ExpressionData.csv
+Beeline/inputs/q3_data/*/ExpressionData*.csv
+Beeline/inputs/q3_data/*/SINCERITIES/ExpressionData*.csv
+
+# Large output files from Beeline (but keep the ones in notebooks/q3)
+Beeline/**/outFile*.txt
+# Allow the important result files in notebooks/q3
+!notebooks/q3/beeline_outputs/**/outFile*.txt
+
+# IDE and OS files
+.DS_Store
+.vscode/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp

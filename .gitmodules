@@ -1,3 +1,6 @@
 [submodule "external_libraries/IntegrAO"]
 	path = external_libraries/IntegrAO
 	url = https://github.com/bowang-lab/IntegrAO.git
+[submodule "Beeline"]
+	path = Beeline
+	url = https://github.com/dylanbforde/Beeline.git

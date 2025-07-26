@@ -43,7 +43,7 @@ luad_clinical <- GDCquery_clinic(project = "TCGA-LUAD", type = "clinical")
 #| message: false
 #| warning: false
 # set path
-expr_path <- "/Users/afra/Desktop/MEIN40330-AI for Personalised Medicine/Final Project/Final Project/TCGA.LUAD.sampleMap_HiSeqV2.gz"
+expr_path <- "../../dat/TCGA.LUAD.sampleMap_HiSeqV2.gz"
 
 # read UCSC Xena FPKM expression data
 expr_data <- read.delim(expr_path, header = TRUE, row.names = 1, check.names = FALSE)
