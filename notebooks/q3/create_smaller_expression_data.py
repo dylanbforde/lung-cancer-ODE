@@ -4,7 +4,7 @@ input_file = "/home/dylan/Code/lung-cancer-ODE/Beeline/inputs/q3_data/LungCancer
 output_file = "/home/dylan/Code/lung-cancer-ODE/Beeline/inputs/q3_data/LungCancer_small/ExpressionData.csv"
 num_columns = 100
 
-with open(input_file, 'r') as infile, open(output_file, 'w', newline='') as outfile:
+with open(input_file, "r") as infile, open(output_file, "w", newline="") as outfile:
     reader = csv.reader(infile)
     writer = csv.writer(outfile)
 
