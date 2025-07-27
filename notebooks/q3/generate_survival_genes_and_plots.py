@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Script to generate gene lists for survival analysis and save visualizations
-from beeline GENIE3 and PPCOR outputs
-"""
-
 from beeline_analysis import BeelineAnalyzer
 import pandas as pd
 
@@ -64,4 +58,3 @@ def main():
 
 if __name__ == "__main__":
     analyzer, gene_lists = main()
-

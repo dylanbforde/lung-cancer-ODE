@@ -1,4 +1,3 @@
-# file: scripts/03_write_pseudotime_for_beeline.py
 import pandas as pd, argparse
 
 ap = argparse.ArgumentParser()

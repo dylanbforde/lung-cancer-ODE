@@ -1,4 +1,3 @@
-# file: txt_to_h5ad_stream.py
 import argparse, gc, sys, h5py, numpy as np, scanpy as sc
 from pathlib import Path
 import pandas as pd
@@ -60,7 +59,6 @@ def main():
 
     # ── prepare HDF5 container ──────────────────────────────────────────────
     with h5py.File(out, "w") as h5:
-        # 1️⃣  root‑level attrs required by AnnData
         h5.attrs["encoding-type"] = "anndata"
         h5.attrs["encoding-version"] = "0.1.0"
         h5.attrs["n_obs"] = 0
@@ -146,7 +144,6 @@ def main():
         )
         csv_flush(csv_fh, csv_rows, final=True)
 
-    # Debugging: Inspect the HDF5 file directly before Scanpy tries to read it
     try:
         with h5py.File(out, "r") as f_debug:
             print(f"[DEBUG] HDF5 file root keys: {list(f_debug.keys())}")

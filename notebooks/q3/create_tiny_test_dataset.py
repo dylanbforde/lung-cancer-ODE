@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Create a tiny test dataset for faster Beeline algorithm testing.
-Reduces both genes and cells significantly.
-"""
-
 import pandas as pd
 import numpy as np
 import os
