@@ -1,0 +1,11 @@
+primary_treatment,n,percentage,cumulative_percentage
+Standard Chemotherapy,253,48.3,48.3
+Surgery (Lobectomy),123,23.5,71.8
+Osimertinib (EGFR TKI),73,13.9,85.7
+Alectinib (ALK inhibitor),30,5.7,91.4
+Surgery (Sublobar),21,4,95.4
+Stereotactic Body Radiation (SBRT),13,2.5,97.9
+Pembrolizumab + Chemotherapy,6,1.1,99
+Pembrolizumab monotherapy,3,0.6,99.6
+Best Supportive Care,1,0.2,99.8
+Carboplatin + Paclitaxel,1,0.2,100

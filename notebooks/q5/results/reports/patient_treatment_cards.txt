@@ -1,0 +1,414 @@
+
+======================================================================
+PATIENT TREATMENT CARD #1
+======================================================================
+Patient ID: TCGA-05-4397
+Age: 65 years | Gender: Male
+Stage: Stage I
+ECOG PS: Unknown
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Positive
+- PD-L1: Low
+
+TREATMENT RECOMMENDATIONS:
+Primary: Alectinib (ALK inhibitor)
+Second-line: Next-generation ALK inhibitor or chemotherapy
+Evidence Level: 1
+Confidence: 0.9
+
+Rationale: ALK fusion positive - alectinib first-line
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #2
+======================================================================
+Patient ID: TCGA-05-4432
+Age: 66 years | Gender: Male
+Stage: Stage I
+ECOG PS: Unknown
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Positive
+- PD-L1: Medium
+
+TREATMENT RECOMMENDATIONS:
+Primary: Alectinib (ALK inhibitor)
+Second-line: Next-generation ALK inhibitor or chemotherapy
+Evidence Level: 1
+Confidence: 0.9
+
+Rationale: ALK fusion positive - alectinib first-line
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #3
+======================================================================
+Patient ID: TCGA-97-8171
+Age: 81 years | Gender: Male
+Stage: Stage IV
+ECOG PS: 1
+
+BIOMARKERS:
+- EGFR: Positive
+- ALK: Unknown
+- PD-L1: Low
+
+TREATMENT RECOMMENDATIONS:
+Primary: Best Supportive Care
+Second-line: Clinical trial or supportive care
+Evidence Level: 1
+Confidence: 0.9
+
+Rationale: ECOG ≥4 or elderly Stage IV - supportive care
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #4
+======================================================================
+Patient ID: TCGA-78-7167
+Age: 77 years | Gender: Male
+Stage: Stage IV
+ECOG PS: 1
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: Low
+
+TREATMENT RECOMMENDATIONS:
+Primary: Carboplatin + Paclitaxel
+Second-line: Clinical trial or supportive care
+Evidence Level: 2A
+Confidence: 0.7
+
+Rationale: Good ECOG, no driver mutations - platinum doublet
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #5
+======================================================================
+Patient ID: TCGA-05-4382
+Age: 68 years | Gender: Male
+Stage: Stage I
+ECOG PS: Unknown
+
+BIOMARKERS:
+- EGFR: Positive
+- ALK: Positive
+- PD-L1: High
+
+TREATMENT RECOMMENDATIONS:
+Primary: Osimertinib (EGFR TKI)
+Second-line: Chemotherapy + Bevacizumab (post-EGFR resistance)
+Evidence Level: 1
+Confidence: 0.95
+
+Rationale: EGFR mutation positive - osimertinib first-line
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #6
+======================================================================
+Patient ID: TCGA-05-4402
+Age: 57 years | Gender: Female
+Stage: Stage IV
+ECOG PS: Unknown
+
+BIOMARKERS:
+- EGFR: Positive
+- ALK: Unknown
+- PD-L1: Medium
+
+TREATMENT RECOMMENDATIONS:
+Primary: Osimertinib (EGFR TKI)
+Second-line: Chemotherapy + Bevacizumab (post-EGFR resistance)
+Evidence Level: 1
+Confidence: 0.95
+
+Rationale: EGFR mutation positive - osimertinib first-line
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #7
+======================================================================
+Patient ID: TCGA-55-8512
+Age: 41 years | Gender: Male
+Stage: Stage IV
+ECOG PS: 1
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: Medium
+
+TREATMENT RECOMMENDATIONS:
+Primary: Pembrolizumab + Chemotherapy
+Second-line: Docetaxel + Ramucirumab
+Evidence Level: 2A
+Confidence: 0.8
+
+Rationale: PD-L1 1-49% - pembrolizumab + platinum doublet
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #8
+======================================================================
+Patient ID: TCGA-55-8620
+Age: 60 years | Gender: Male
+Stage: Stage IV
+ECOG PS: 2
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: Medium
+
+TREATMENT RECOMMENDATIONS:
+Primary: Pembrolizumab + Chemotherapy
+Second-line: Docetaxel + Ramucirumab
+Evidence Level: 2A
+Confidence: 0.8
+
+Rationale: PD-L1 1-49% - pembrolizumab + platinum doublet
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #9
+======================================================================
+Patient ID: TCGA-53-7624
+Age: 40 years | Gender: Female
+Stage: Stage IV
+ECOG PS: 0
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: High
+
+TREATMENT RECOMMENDATIONS:
+Primary: Pembrolizumab monotherapy
+Second-line: Docetaxel + Ramucirumab
+Evidence Level: 2A
+Confidence: 0.85
+
+Rationale: PD-L1 ≥50%, good ECOG - pembrolizumab monotherapy
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #10
+======================================================================
+Patient ID: TCGA-73-4666
+Age: 52 years | Gender: Female
+Stage: Stage IV
+ECOG PS: 0
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: High
+
+TREATMENT RECOMMENDATIONS:
+Primary: Pembrolizumab monotherapy
+Second-line: Docetaxel + Ramucirumab
+Evidence Level: 2A
+Confidence: 0.85
+
+Rationale: PD-L1 ≥50%, good ECOG - pembrolizumab monotherapy
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #11
+======================================================================
+Patient ID: bcr_patient_barcode
+Age: Unknown | Gender: Unknown
+Stage: pathologic_stage
+ECOG PS: Unknown
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: Unknown
+
+TREATMENT RECOMMENDATIONS:
+Primary: Standard Chemotherapy
+Second-line: Immunotherapy (if eligible)
+Evidence Level: 2A
+Confidence: 0.6
+
+Rationale: Standard of care
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #12
+======================================================================
+Patient ID: CDE_ID:2003301
+Age: Unknown | Gender: Unknown
+Stage: CDE_ID:3203222
+ECOG PS: Unknown
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: Unknown
+
+TREATMENT RECOMMENDATIONS:
+Primary: Standard Chemotherapy
+Second-line: Immunotherapy (if eligible)
+Evidence Level: 2A
+Confidence: 0.6
+
+Rationale: Standard of care
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #13
+======================================================================
+Patient ID: TCGA-55-8508
+Age: 60 years | Gender: Female
+Stage: Stage I
+ECOG PS: 2
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: Low
+
+TREATMENT RECOMMENDATIONS:
+Primary: Stereotactic Body Radiation (SBRT)
+Second-line: Clinical trial or supportive care
+Evidence Level: 2A
+Confidence: 0.85
+
+Rationale: Medically inoperable early stage - SBRT
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #14
+======================================================================
+Patient ID: TCGA-55-8511
+Age: 73 years | Gender: Female
+Stage: Stage I
+ECOG PS: 2
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: High
+
+TREATMENT RECOMMENDATIONS:
+Primary: Stereotactic Body Radiation (SBRT)
+Second-line: Clinical trial or supportive care
+Evidence Level: 2A
+Confidence: 0.85
+
+Rationale: Medically inoperable early stage - SBRT
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #15
+======================================================================
+Patient ID: TCGA-35-4122
+Age: 69 years | Gender: Male
+Stage: Stage I
+ECOG PS: 1
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: High
+
+TREATMENT RECOMMENDATIONS:
+Primary: Surgery (Lobectomy)
+Second-line: Adjuvant chemotherapy (if high-risk)
+Evidence Level: 1
+Confidence: 0.9
+
+Rationale: Early stage (Stage I), ECOG ≤1 - surgical resection
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #16
+======================================================================
+Patient ID: TCGA-35-4123
+Age: 38 years | Gender: Male
+Stage: Stage I
+ECOG PS: 1
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: High
+
+TREATMENT RECOMMENDATIONS:
+Primary: Surgery (Lobectomy)
+Second-line: Adjuvant chemotherapy (if high-risk)
+Evidence Level: 1
+Confidence: 0.9
+
+Rationale: Early stage (Stage I), ECOG ≤1 - surgical resection
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #17
+======================================================================
+Patient ID: TCGA-44-A47A
+Age: 78 years | Gender: Female
+Stage: Stage I
+ECOG PS: 1
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: Medium
+
+TREATMENT RECOMMENDATIONS:
+Primary: Surgery (Sublobar)
+Second-line: Adjuvant chemotherapy (if high-risk)
+Evidence Level: 1
+Confidence: 0.9
+
+Rationale: Early stage (Stage I), ECOG ≤1 - surgical resection
+======================================================================
+
+
+======================================================================
+PATIENT TREATMENT CARD #18
+======================================================================
+Patient ID: TCGA-44-A47B
+Age: 79 years | Gender: Male
+Stage: Stage I
+ECOG PS: 0
+
+BIOMARKERS:
+- EGFR: Unknown
+- ALK: Unknown
+- PD-L1: Low
+
+TREATMENT RECOMMENDATIONS:
+Primary: Surgery (Sublobar)
+Second-line: Adjuvant chemotherapy (if high-risk)
+Evidence Level: 1
+Confidence: 0.9
+
+Rationale: Early stage (Stage I), ECOG ≤1 - surgical resection
+======================================================================
+

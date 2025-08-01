@@ -1,0 +1,7 @@
+stage,n_patients,surgical_rate,radiation_rate,systemic_rate,curative_intent_rate
+CDE_ID:3203222,1,0,0,100,0
+Stage I,488,29.5,2.7,67.8,41.6
+Stage IV,26,0,0,92.3,0
+[Discrepancy],7,0,0,100,0
+[Not Available],1,0,0,100,0
+pathologic_stage,1,0,0,100,0

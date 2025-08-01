@@ -1,0 +1,9 @@
+{
+  "total_patients": [524],
+  "patients_with_ecog": [219],
+  "patients_with_biomarkers": [515],
+  "biomarker_guided_rate": [21.6],
+  "curative_intent_rate": [38.7],
+  "combination_therapy_rate": [1.1],
+  "average_confidence": [0.76]
+}
