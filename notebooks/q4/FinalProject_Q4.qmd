@@ -17,232 +17,488 @@ Objective - identify genes or pathways that are potential drug targets for LUAD,
 -   genes with high dependency scores in LUAD cell lines in DepMap (indicating essential for cancer cell survival)
 -   genes whose perturbation in LINCS data alters LUAD-relevant phenotypes (e.g., reduced cell viability or proliferation).
 
-```{r, load_libraries}
+
+# Setup for Data Analysis
+
+```{r setup, message=FALSE, warning=FALSE}
 #| message: false
 #| warning: false
-# load required packages
-# if (!requireNamespace("BiocManager", quietly = TRUE))
-#     install.packages("BiocManager")
-# BiocManager::install("TCGAbiolinks")
-# BiocManager::install("survcomp")
-# BiocManager::install("cmapR")
-# Install devtools if not already installed
-if (!requireNamespace("devtools", quietly = TRUE)) {
-  install.packages("devtools")
+
+# Install and load pacman for efficient package management
+if (!requireNamespace("pacman", quietly = TRUE)) {
+  install.packages("pacman")
 }
-# Install cmapR from GitHub
-devtools::install_github("cmap/cmapR")
-# Install other useful packages
-install.packages(c("BiocManager", "dplyr", "tibble", "ggplot2"))
-BiocManager::install("rhdf5")  # Required for reading HDF5 files in LINCS
-BiocManager::install("DESeq2")  
-BiocManager::install("org.Hs.eg.db")
-library(TCGAbiolinks)
-library(survival)
-library(survminer)
-library(dplyr)
-library(readr)
-library(tidyr)
-library(glmnet)
-library(survcomp)
-library(cmapR)
-library(SummarizedExperiment)
-library(DESeq2)
-library(AnnotationDbi)
-library(org.Hs.eg.db)
+library(pacman)
+
+# Install BiocManager if not already installed
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+# Define required CRAN and Bioconductor packages
+cran_packages <- c("dplyr", "tibble", "ggplot2", "readr", "tidyr", "glmnet", "survival", "survminer", "data.table")
+bioc_packages <- c("TCGAbiolinks", "survcomp", "cmapR", "rhdf5", "DESeq2", "org.Hs.eg.db", "SummarizedExperiment", "AnnotationDbi")
+
+# Install CRAN packages if not already installed
+pacman::p_load(char = cran_packages)
+
+# Install Bioconductor packages if not already installed
+for (pkg in bioc_packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    BiocManager::install(pkg, update = FALSE, ask = FALSE)
+  }
+}
+
+# Install cmapR from GitHub if not already installed
+if (!requireNamespace("cmapR", quietly = TRUE)) {
+  pacman::p_load(devtools)
+  devtools::install_github("cmap/cmapR")
+}
+
+# Load all required packages
+pacman::p_load(char = cran_packages)
+for (pkg in bioc_packages) {
+  library(pkg, character.only = TRUE)
+}
 ```
 
-```{r, download_rawdata}
+# Data Download and Preprocessing
+
+The following chunk downloads raw TCGA-LUAD data.
+
+```{r download_rawdata, message=FALSE, warning=FALSE, cache=TRUE}
 #| message: false
 #| warning: false
-# download dataset
-# query_expr <- GDCquery(project = "TCGA-LUAD", data.category = "Transcriptome Profiling",
-#  data.type = "Gene Expression Quantification", workflow.type="STAR - Counts"
-#)
-# GDCdownload(query_expr)
-# luad_expr <- GDCprepare(query_expr)
+#| cache: true
 
-# Filter for tumor versus normal samples
-sample_types <- c("Primary Tumor", "Solid Tissue Normal")
-counts <- assay(luad_expr)
-colData <- colData(luad_expr)
-keep <- colData$sample_type %in% c("Primary Tumor", "Solid Tissue Normal")
-counts <- counts[, keep]
-colData <- colData[keep, ]
+# Section 1: Download TCGA-LUAD gene expression data (run only if not already downloaded)
+setwd("/Users/martha/projects/lung-cancer-ODE/notebooks/q4")
+data_dir <- "../../dat"
+data_file <- file.path(data_dir, "luad_expr.rds")
+tcga_degs_file <- file.path(data_dir, "tcga_genes_df.rds")
+tcga_res_file <- file.path(data_dir, "tcga_res.rds")
 
-# DEG analysis
-dds <- DESeqDataSetFromMatrix(countData=round(counts), colData=colData, design = ~ sample_type)
-dds <- DESeq(dds)
-res <- results(dds, contrast = c("sample_type", "Primary Tumor", "Solid Tissue Normal"))
+if (!file.exists(tcga_degs_file) || !file.exists(tcga_res_file)) {
+  if (!file.exists(data_file)) {
 
-# Filter for significant DEGs
-tcga_degs <- rownames(res)[!is.na(res$padj) & res$padj < 0.05 & abs(res$log2FoldChange) > 1]
+    # Query TCGA-LUAD dataset
+    query_expr <- TCGAbiolinks::GDCquery(
+      project = "TCGA-LUAD",
+      data.category = "Transcriptome Profiling",
+      data.type = "Gene Expression Quantification",
+      workflow.type = "STAR - Counts"
+    )
 
-# Strip version numbers from Ensembl IDs
-tcga_degs_clean <- sub("\\..*", "", tcga_degs)
+    # Download data
+    TCGAbiolinks::GDCdownload(query_expr)
+    
+    # Prepare data
+    luad_expr <- TCGAbiolinks::GDCprepare(query_expr)
 
-# Map to gene symbols
-tcga_genes <- mapIds(org.Hs.eg.db, keys = tcga_degs_clean, keytype = "ENSEMBL", column = "SYMBOL", multiVals = "first")
-print(tcga_genes)
-length(tcga_genes)
-```
+    # Save to avoid redundant downloads
+    saveRDS(luad_expr, file = data_file)
+  } else {
+    # Load cached data
+    luad_expr <- readRDS(data_file)
+  }
 
-```{r, download_lincs}
+  # Section 2: Filter for tumor vs. normal samples
+  sample_types <- c("Primary Tumor", "Solid Tissue Normal")
+  counts <- SummarizedExperiment::assay(luad_expr)
+  colData <- SummarizedExperiment::colData(luad_expr)
+  keep <- colData$sample_type %in% sample_types
+
+  # Verify that samples are available
+  if (sum(keep) == 0) {
+    stop("No samples found for specified sample types: ", paste(sample_types, collapse = ", "))
+  }
+
+  counts <- counts[, keep]
+  colData <- colData[keep, ]
+
+  # Section 3: Differential Expression Analysis
+  dds <- DESeq2::DESeqDataSetFromMatrix(
+    countData = round(counts),
+    colData = colData,
+    design = ~ sample_type
+  )
+  dds <- DESeq2::DESeq(dds)
+  res <- DESeq2::results(dds, contrast = c("sample_type", "Primary Tumor", "Solid Tissue Normal"))
+
+  # Section 4: Filter significant DEGs
+  tcga_degs <- rownames(res)[!is.na(res$padj) & res$padj < 0.05 & abs(res$log2FoldChange) > 1]
+
+  # Section 5: Map Ensembl IDs to gene symbols
+  tcga_degs_clean <- sub("\\..*", "", tcga_degs) # Strip version numbers
+  tcga_genes <- AnnotationDbi::mapIds(
+    org.Hs.eg.db,
+    keys = tcga_degs_clean,
+    keytype = "ENSEMBL",
+    column = "SYMBOL",
+    multiVals = "first"
+  )
+
+  # Section 6: Summarize results
+  # Convert to data frame for cleaner output
+  tcga_genes_df <- data.frame(
+    Ensembl = tcga_degs_clean,
+    Symbol = tcga_genes,
+    stringsAsFactors = FALSE
+  )
+  
+  saveRDS(tcga_genes_df, file = tcga_degs_file)
+  saveRDS(res, file = tcga_res_file)
+} else {
+  tcga_genes_df <- readRDS(tcga_degs_file)
+  res <- readRDS(tcga_res_file)
+}
+
+# Display top 10 genes (or fewer if less available)
+knitr::kable(head(tcga_genes_df, 10), caption = "Top 10 Differentially Expressed Genes (TCGA-LUAD)")
+
+# Report total number of DEGs
+cat("Total number of differentially expressed genes:", length(tcga_genes_df$Symbol[!is.na(tcga_genes_df$Symbol)]), "\n")
+``` 
+
+## Metadata Loading and Filtering
+
+This section loads metadata from the LINCS dataset (GSE92742), validates the data, and filters for lung cancer cell lines and shRNA/drug perturbation signatures.
+
+```{r, load_metadata, message=FALSE, warning=FALSE, cache=TRUE}
 #| message: false
 #| warning: false
+#| cache: true
+
+# Section 1: Define file paths
+
 # Unzip files
-# system("gunzip ../../*.gz")
-```
+system("gunzip ../../dat/*.gz")
 
-```{r, load_metadata}
-# Load metadata
-gene_info <- read.delim("../../dat/GSE92742_Broad_LINCS_gene_info.txt", stringsAsFactors = FALSE)
-cell_info <- read.delim("../../dat/GSE92742_Broad_LINCS_cell_info.txt", stringsAsFactors = FALSE)
-pert_info <- read.delim("../../dat/GSE92742_Broad_LINCS_pert_info.txt", stringsAsFactors = FALSE)
-sig_info <- read.delim("../../dat/GSE92742_Broad_LINCS_sig_info.txt", stringsAsFactors = FALSE)
+files <- c(
+  gene_info = file.path(data_dir, "GSE92742_Broad_LINCS_gene_info.txt"),
+  cell_info = file.path(data_dir, "GSE92742_Broad_LINCS_cell_info.txt"),
+  pert_info = file.path(data_dir, "GSE92742_Broad_LINCS_pert_info.txt"),
+  sig_info = file.path(data_dir, "GSE92742_Broad_LINCS_sig_info.txt")
+)
 
-# validate file contents
-library(dplyr)
-colnames(sig_info)
+# Section 2: Validate files exist
+for (file in files) {
+  if (!file.exists(file)) {
+    stop("File not found: ", file)
+  }
+}
 
-# Filter lung cancer cell lines
-lung_cells <- cell_info %>% filter(grepl("lung", tolower(primary_site))) %>% pull(cell_id)
+# Section 3: Clear memory to free up space
+rm(list = setdiff(ls(), c("data_dir", "files", "tcga_degs_file", "tcga_res_file")))
+gc()
 
-# Filter shRNA/drug signatures
-lung_signatures <- sig_info %>% filter(cell_id %in% lung_cells & pert_type %in% c("trt_sh", "trt_cp"))
-```
+# Section 4: Load metadata
+gene_info <- data.table::fread(files["gene_info"], sep = "\t", verbose = FALSE, showProgress = FALSE)
+cell_info <- data.table::fread(files["cell_info"], sep = "\t", verbose = FALSE, showProgress = FALSE)
+pert_info <- data.table::fread(files["pert_info"], sep = "\t", verbose = FALSE, showProgress = FALSE)
+sig_info <- data.table::fread(
+  files["sig_info"],
+  sep = "\t",
+  select = c("sig_id", "cell_id", "pert_id", "pert_type", "pert_iname"),
+  verbose = FALSE,
+  showProgress = FALSE
+)
 
-```{r, identify_cell_lines}
-# Filter for lung cancer cell lines
+# Convert data.tables to data.frames for dplyr compatibility
+gene_info <- as.data.frame(gene_info)
+cell_info <- as.data.frame(cell_info)
+pert_info <- as.data.frame(pert_info)
+sig_info <- as.data.frame(sig_info)
+
+# Section 5: Validate required columns are present
+required_cols <- list(
+  cell_info = "primary_site",
+  sig_info = c("sig_id", "cell_id", "pert_id", "pert_type", "pert_iname")
+)
+for (df_name in names(required_cols)) {
+  df <- get(df_name)
+  missing_cols <- setdiff(required_cols[[df_name]], colnames(df))
+  if (length(missing_cols) > 0) {
+    stop("Missing required columns in ", df_name, ": ", paste(missing_cols, collapse = ", "))
+  }
+}
+
+# Section 6: Filter lung cancer cell lines -- Examples: A549, NCIH1299, HCC827
 lung_cell_lines <- cell_info %>%
-  filter(grepl("lung", tolower(primary_site))) %>%
-  pull(cell_id)
-print(lung_cell_lines)  # Examples: A549, NCIH1299, HCC827
-```
+  dplyr::filter(grepl("lung", tolower(primary_site))) %>%
+  dplyr::pull(cell_id)
 
-```{r, filter_signatures}
-# Filter signatures for lung cancer cell lines and shRNA/drug perturbations
+# Verify that lung cell lines are found 
+if (length(lung_cell_lines) == 0) {
+  stop("No lung cancer cell lines found in cell_info")
+}
+
+# Section 7: Filter signatures for lung cancer cell lines and shRNA/drug perturbations
 lung_signatures <- sig_info %>%
-  filter(cell_id %in% lung_cell_lines & pert_type %in% c("trt_sh", "trt_cp")) %>%
-  select(sig_id, cell_id, pert_id, pert_type, pert_iname)
-head(lung_signatures)
+  dplyr::filter(cell_id %in% lung_cell_lines & pert_type %in% c("trt_sh", "trt_cp")) %>%
+  dplyr::select(sig_id, cell_id, pert_id, pert_type, pert_iname)
+
+# Verify that signatures are found
+if (nrow(lung_signatures) == 0) {
+  stop("No signatures found for lung cancer cell lines with shRNA or drug perturbations")
+}
+
+# Section 8: Save filtered signatures to avoid reloading
+saveRDS(lung_signatures, file = file.path(data_dir, "lung_signatures.rds"))
+
+# Section 9: Display results
+knitr::kable(head(lung_cell_lines, 10), col.names = "Lung Cancer Cell Lines", caption = "Top 10 Lung Cancer Cell Lines")
+cat("Total number of lung cancer cell lines:", length(lung_cell_lines), "\n")
+knitr::kable(head(lung_signatures, 10), caption = "Top 10 Filtered Signatures (Lung Cancer, shRNA/Drug)")
+cat("Total number of filtered signatures:", nrow(lung_signatures), "\n")
 ```
 
-```{r, load_level_five_data}
-# Load Level 5 data for specific signatures
-gctx_file <- "../../dat/GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx"
+# LINCS Level 5 Data Processing
+
+This section loads LINCS Level 5 z-score data for lung cancer signatures, maps Entrez IDs to gene symbols, filters for shRNA and drug perturbations (gefitinib, erlotinib), and identifies significant genes with |z-score| > 2.
+
+```{r, load_level_five_data, message=FALSE, warning=FALSE, cache=TRUE}
+#| message: false
+#| warning: false
+#| cache: true
+
+# Section 1: Define data directory and file paths
+data_dir <- "../../dat"
+gctx_file <- file.path(data_dir, "GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n473647x12328.gctx")
+lung_sig_file <- file.path(data_dir, "lung_signatures.rds")
+
+# Section 2: Validate file existence
+if (!file.exists(gctx_file)) {
+  stop("GCTX file not found: ", gctx_file)
+}
+if (!file.exists(lung_sig_file)) {
+  stop("Lung signatures file not found: ", lung_sig_file)
+}
+
+# Section 3: Load lung signatures
+lung_signatures <- readRDS(lung_sig_file)
 lung_sig_ids <- lung_signatures$sig_id
-ds <- parse_gctx(gctx_file, cid = lung_sig_ids)  # Load only lung cancer signatures
-```
 
-```{r, map_gene_ids}
-# Map Entrez IDs to gene symbols
-gene_ids <- ds@rid  # Row IDs (Entrez IDs)
+# Section 4: Clear memory to free up space
+rm(list = setdiff(ls(), c("data_dir", "gctx_file", "lung_signatures", "lung_sig_ids", "gene_info", "tcga_genes_df")))
+gc()
+
+# Section 5: Load Level 5 data for lung cancer signatures
+ds_file <- file.path(data_dir, "lung_level5_data.rds")
+if (!file.exists(ds_file)) {
+  ds <- cmapR::parse_gctx(gctx_file, cid = lung_sig_ids)
+  saveRDS(ds, file = ds_file)
+} else {
+  ds <- readRDS(ds_file)
+}
+
+# Section 6: Validate signature IDs
+if (!all(lung_sig_ids %in% ds@cid)) {
+  stop("Some lung signature IDs not found in GCTX file")
+}
+
+# Section 7: Map Entrez IDs to gene symbols
+gene_ids <- ds@rid
 gene_symbols <- gene_info %>%
-  filter(pr_gene_id %in% gene_ids) %>%
-  select(pr_gene_id, pr_gene_symbol)
-head(gene_symbols)
-```
+  dplyr::filter(pr_gene_id %in% gene_ids) %>%
+  dplyr::select(pr_gene_id, pr_gene_symbol)
+if (nrow(gene_symbols) == 0) {
+  stop("No matching gene IDs found in gene_info")
+}
 
-```{r, analyze_signatures}
-# Filter for shRNA sigs
+# Section 8: Filter shRNA and drug signatures
 shRNA_signatures <- lung_signatures %>%
-  filter(pert_type == "trt_sh")
+  dplyr::filter(pert_type == "trt_sh")
 shRNA_sig_ids <- shRNA_signatures$sig_id
-
-# Subset GCT for shRNA signatures
-shRNA_ds <- parse_gctx(gctx_file, cid = shRNA_sig_ids)
-saveRDS(shRNA_ds, "shRNA_lung_signatures.rds")
-
-# Next for drug perturbations
 drug_signatures <- lung_signatures %>%
-  filter(pert_type == "trt_cp" & pert_iname %in% c("gefitinib", "erlotinib"))  # Example drugs
+  dplyr::filter(pert_type == "trt_cp" & pert_iname %in% c("gefitinib", "erlotinib"))
 drug_sig_ids <- drug_signatures$sig_id
 
-# Subset GCT for drug signatures
-drug_ds <- parse_gctx(gctx_file, cid = drug_sig_ids)
-saveRDS(drug_ds, "drug_lung_signatures.rds")
-```
+# Verify signatures
+if (length(shRNA_sig_ids) == 0) {
+  stop("No shRNA signatures found")
+}
+if (length(drug_sig_ids) == 0) {
+  stop("No drug signatures found for gefitinib or erlotinib")
+}
 
-```{r, id_sig_genes}
-# Extract z-scores for shRNA signatures
+# Section 9: Subset GCT for shRNA and drug signatures
+shRNA_ds <- cmapR::subset_gct(ds, cid = shRNA_sig_ids)
+drug_ds <- cmapR::subset_gct(ds, cid = drug_sig_ids)
+
+# Save subsets to avoid reprocessing
+saveRDS(shRNA_ds, file = file.path(data_dir, "shRNA_lung_signatures.rds"))
+saveRDS(drug_ds, file = file.path(data_dir, "drug_lung_signatures.rds"))
+
+# Section 10: Identify significant genes from shRNA signatures
 z_scores <- shRNA_ds@mat
-significant_genes <- apply(z_scores, 1, function(x) any(abs(x) > 2))  # Genes with |z| > 2
+significant_genes <- apply(z_scores, 1, function(x) any(abs(x) > 2))
 sig_gene_ids <- shRNA_ds@rid[significant_genes]
 sig_gene_symbols <- gene_info %>%
-  filter(pr_gene_id %in% sig_gene_ids) %>%
-  pull(pr_gene_symbol)
-print(head(sig_gene_symbols))  # Candidate genes
+  dplyr::filter(pr_gene_id %in% sig_gene_ids) %>%
+  dplyr::pull(pr_gene_symbol)
+if (length(sig_gene_symbols) == 0) {
+  stop("No significant genes found with |z-score| > 2")
+}
+
+# Section 11: Display results
+knitr::kable(head(gene_symbols, 10), caption = "Top 10 Gene ID to Symbol Mappings")
+cat("Total number of mapped genes:", nrow(gene_symbols), "\n")
+knitr::kable(head(shRNA_signatures, 10), caption = "Top 10 shRNA Signatures")
+cat("Total number of shRNA signatures:", nrow(shRNA_signatures), "\n")
+knitr::kable(head(drug_signatures, 10), caption = "Top 10 Drug Signatures (Gefitinib/Erlotinib)")
+cat("Total number of drug signatures:", nrow(drug_signatures), "\n")
+knitr::kable(head(data.frame(Gene_Symbol = sig_gene_symbols), 10), caption = "Top 10 Significant Genes (|z-score| > 2)")
+cat("Total number of significant genes:", length(sig_gene_symbols), "\n")
 # Candidate genes are: "DDR1"   "PAX8"   "GUCA1A" "EPHB3"  "ESRRA"  "TRADD"
 ```
 
+# DepMap Data Processing
 
-```{r, filter_depmap_}
-# Unzip files
-# system("gunzip ../../dat/CRISPRGeneEffect.csv.xz")
-gene_effect <- read_csv("../../dat/CRISPRGeneEffect.csv")
-#colnames(gene_effect)[1:10]  # Should include DepMap_ID and gene columns like TP53 (7157)
-#head(gene_effect)
-model_data <- read_csv("../../dat/Model.csv")
-#colnames(model_data)
-#head(model_data)
+This section loads DepMap CRISPR gene effect and model data, filters for lung adenocarcinoma (LUAD) cell lines, identifies essential genes (CERES < -0.5 in 60–90% of LUAD cell lines), and intersects with TCGA and LINCS results to identify candidate target genes.
 
-# Filter for LUAD cell lines
-luad_cells <- model_data %>% 
-  filter(grepl("lung", tolower(OncotreeLineage)) & 
-         grepl("adenocarcinoma|non-small cell lung", tolower(OncotreeSubtype))) %>% 
-  pull(ModelID)
+```{r, filter_depmap, message=FALSE, warning=FALSE, cache=TRUE}
+#| message: false
+#| warning: false
+#| cache: true
 
-# Print the LUAD cell line IDs
-cat("Number of LUAD cell lines:", length(luad_cells), "\n")
-print("LUAD Cells:")
-print(luad_cells)
+# Section 1: Define file paths
+files <- c(
+  gene_effect = file.path(data_dir, "CRISPRGeneEffect.csv"),
+  model_data = file.path(data_dir, "Model.csv")
+)
 
-# Verify: 
-model_data %>% 
-  filter(ModelID %in% luad_cells) %>% 
-  select(ModelID, CellLineName, OncotreeLineage, OncotreeSubtype)
-```
-```{r, crispr_gene_effect}
-# Subset gene effect data for LUAD cell lines
-gene_effect <- read_csv("../../dat/CRISPRGeneEffect.csv")
+# Section 2: Validate file existence
+for (file in files) {
+  if (!file.exists(file)) {
+    stop("File not found: ", file)
+  }
+}
+
+# Section 3: Clear memory to free up space
+rm(list = setdiff(ls(), c("data_dir", "files", "tcga_degs_file", "tcga_res_file", "sig_gene_symbols")))
+gc()
+
+# Section 4: Load DepMap data
+gene_effect <- data.table::fread(files["gene_effect"], verbose = FALSE, showProgress = FALSE)
+model_data <- data.table::fread(files["model_data"], verbose = FALSE, showProgress = FALSE)
+gene_effect <- as.data.frame(gene_effect)
+model_data <- as.data.frame(model_data)
+
+# Section 5: Rename first column of gene_effect to DepMap_ID
 colnames(gene_effect)[1] <- "DepMap_ID"
 
-# Inspect the first few column names
-colnames(gene_effect)[1:10]  # Should include DepMap_ID and gene columns like TP53 (7157)
-head(gene_effect)
-luad_gene_effect <- gene_effect %>% 
-  filter(DepMap_ID %in% luad_cells)
+# Section 6: Validate required columns
+required_cols <- list(
+  gene_effect = "DepMap_ID",
+  model_data = c("ModelID", "CellLineName", "OncotreeLineage", "OncotreeSubtype")
+)
+for (df_name in names(required_cols)) {
+  df <- get(df_name)
+  missing_cols <- setdiff(required_cols[[df_name]], colnames(df))
+  if (length(missing_cols) > 0) {
+    stop("Missing required columns in ", df_name, ": ", paste(missing_cols, collapse = ", "))
+  }
+}
 
-# Identify essential genes (CERES < -0.5 in >50% of LUAD cell lines)
-essential_genes <- luad_gene_effect %>% 
-  select(-DepMap_ID) %>% 
-  summarise_all(~ mean(. < -0.5, na.rm = TRUE)) %>% 
-  pivot_longer(everything(), names_to = "gene", values_to = "prop_essential") %>% 
-  # filter(prop_essential > 0.5) %>% 
-  filter(prop_essential > 0.6 & prop_essential < 0.9) %>%  # Adjusted range
-  mutate(gene_symbol = sub(" \\(.*\\)", "", gene)) %>% 
-  distinct(gene_symbol, .keep_all = TRUE)  # Remove duplicates
+# Section 7: Filter for LUAD cell lines
+luad_cells <- model_data %>%
+  dplyr::filter(grepl("lung", tolower(OncotreeLineage)) &
+                grepl("adenocarcinoma|non-small cell lung", tolower(OncotreeSubtype))) %>%
+  dplyr::pull(ModelID)
+if (length(luad_cells) == 0) {
+  stop("No LUAD cell lines found in model_data")
+}
 
-# Print the top essential genes
-print(head(essential_genes))
+# Section 8: Subset gene effect data for LUAD cell lines
+luad_gene_effect <- gene_effect %>%
+  dplyr::filter(DepMap_ID %in% luad_cells)
+if (nrow(luad_gene_effect) == 0) {
+  stop("No gene effect data found for LUAD cell lines")
+}
 
-write_csv(essential_genes, "luad_essential_genes.csv")
+# Section 9: Identify essential genes (CERES < -0.5 in 60–90% of LUAD cell lines)
+essential_genes <- luad_gene_effect %>%
+  dplyr::select(-DepMap_ID) %>%
+  dplyr::summarise_all(~ mean(. < -0.5, na.rm = TRUE)) %>%
+  tidyr::pivot_longer(everything(), names_to = "gene", values_to = "prop_essential") %>%
+  dplyr::filter(prop_essential > 0.6 & prop_essential < 0.9) %>%
+  dplyr::mutate(gene_symbol = sub(" \\(.*\\)", "", gene)) %>%
+  dplyr::distinct(gene_symbol, .keep_all = TRUE)
+if (nrow(essential_genes) == 0) {
+  stop("No essential genes found with prop_essential between 0.6 and 0.9")
+}
 
+# Section 10: Save essential genes
+saveRDS(essential_genes, file = file.path(data_dir, "luad_essential_genes.rds"))
+
+# Section 11: Display results
+knitr::kable(head(luad_cells, 10), col.names = "LUAD Cell Line IDs", caption = "Top 10 LUAD Cell Lines")
+cat("Total number of LUAD cell lines:", length(luad_cells), "\n")
+knitr::kable(head(luad_gene_effect[, 1:6], 10), caption = "Top 10 Rows of LUAD Gene Effect Data (First 5 Genes)")
+cat("Total number of LUAD cell lines with gene effect data:", nrow(luad_gene_effect), "\n")
+knitr::kable(head(essential_genes, 10), caption = "Top 10 Essential Genes (CERES < -0.5 in 60–90% of LUAD Cell Lines)")
+cat("Total number of essential genes:", nrow(essential_genes), "\n")
 ```
 
+# Candidate Gene Identification
 
-```{r, interpret_results}
-corrected_essential_genes <- read_csv("luad_essential_genes.csv")
-lincs_genes <- c("DDR1","PAX8","GUCA1A","EPHB3","ESRRA","TRADD")  # From LINCS
-# tcga_degs <- c("KRAS", "CDK6")   # From TCGA-LUAD
-candidate_targets <- intersect(corrected_essential_genes$gene_symbol, intersect(lincs_genes, names(tcga_genes)))
-print(candidate_targets)
+This section identifies candidate target genes by intersecting essential genes from DepMap with significant genes from LINCS and differentially expressed genes from TCGA-LUAD.
+
+```{r, candidate_gene_id, message=FALSE, warning=FALSE}
+#| message: false
+#| warning: false
+
+# Section 1: Load essential genes
+tcga_degs_file <- file.path(data_dir, "tcga_genes_df.rds")
+if (!file.exists(tcga_degs_file)) {
+  stop("TCGA genes file not found: ", tcga_degs_file)
+}
+tcga_genes_df <- readRDS(tcga_degs_file)
+essential_genes <- readRDS(file.path(data_dir, "luad_essential_genes.rds"))
+
+# Section 2: Define LINCS and TCGA genes
+lincs_genes <- sig_gene_symbols
+tcga_genes <- tcga_genes_df$Symbol[!is.na(tcga_genes_df$Symbol)]
+
+# Section 3: Find candidate target genes
+candidate_targets <- intersect(essential_genes$gene_symbol, intersect(lincs_genes, tcga_genes))
+if (length(candidate_targets) == 0) {
+  warning("No candidate target genes found in the intersection of DepMap, LINCS, and TCGA")
+}
+
+# Section 4: Display results
+knitr::kable(data.frame(Candidate_Targets = candidate_targets), caption = "Candidate Target Genes")
+cat("Total number of candidate target genes:", length(candidate_targets), "\n")
 ```
-```{r, visualizations}
-library(ggplot2)
-ggplot(degs, aes(x = log2FoldChange, y = -log10(padj))) +
-  geom_point() +
+
+# Visualizations
+
+This section visualizes the TCGA-LUAD differential expression results as a volcano plot, highlighting significant genes.
+
+```{r, visualizations, message=FALSE, warning=FALSE, cache=TRUE}
+#| message: false
+#| warning: false
+#| cache: true
+
+# Section 1: Prepare data for volcano plot
+deg_data <- as.data.frame(res) %>%
+  dplyr::mutate(
+    Gene = tcga_genes[match(rownames(res), tcga_degs_clean)],
+    Significant = !is.na(padj) & padj < 0.05 & abs(log2FoldChange) > 1
+  )
+
+# Section 2: Create volcano plot
+ggplot(deg_data, aes(x = log2FoldChange, y = -log10(padj), color = Significant)) +
+  geom_point(size = 1, alpha = 0.5) +
+  scale_color_manual(values = c("grey50", "red")) +
   theme_minimal() +
-  labs(title = "TCGA-LUAD DEGs")
+  labs(
+    title = "Volcano Plot of TCGA-LUAD Differential Expression",
+    x = "Log2 Fold Change (Tumor vs. Normal)",
+    y = "-Log10 Adjusted P-value",
+    color = "Significant (padj < 0.05, |log2FC| > 1)"
+  ) +
+  theme(legend.position = "top")}
 ```
+
