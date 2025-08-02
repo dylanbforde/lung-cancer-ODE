@@ -36,7 +36,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 }
 
 # Define required CRAN and Bioconductor packages
-cran_packages <- c("dplyr", "tibble", "ggplot2", "readr", "tidyr", "glmnet", "survival", "survminer", "data.table")
+cran_packages <- c("dplyr", "tibble", "ggplot2", "readr", "tidyr", "glmnet", "survival", "survminer", "data.table", "ggVennDiagram", "pheatmap", "UpSetR", "ggrepel")
 bioc_packages <- c("TCGAbiolinks", "survcomp", "cmapR", "rhdf5", "DESeq2", "org.Hs.eg.db", "SummarizedExperiment", "AnnotationDbi")
 
 # Install CRAN packages if not already installed
@@ -474,31 +474,145 @@ cat("Total number of candidate target genes:", length(candidate_targets), "\n")
 
 # Visualizations
 
-This section visualizes the TCGA-LUAD differential expression results as a volcano plot, highlighting significant genes.
+This section visualizes the intersecting candidate target genes from TCGA, LINCS, and DepMap using a Venn diagram, enhanced volcano plot, heatmap of LINCS z-scores, bar plot of DepMap essentiality, and an UpSet plot.
 
 ```{r, visualizations, message=FALSE, warning=FALSE, cache=TRUE}
 #| message: false
 #| warning: false
 #| cache: true
 
-# Section 1: Prepare data for volcano plot
+# Section 1: Load required data
+tcga_degs_file <- file.path(data_dir, "tcga_genes_df.rds")
+tcga_res_file <- file.path(data_dir, "tcga_res.rds")
+essential_genes_file <- file.path(data_dir, "luad_essential_genes.rds")
+shRNA_ds_file <- file.path(data_dir, "shRNA_lung_signatures.rds")
+
+for (file in c(tcga_degs_file, tcga_res_file, essential_genes_file, shRNA_ds_file)) {
+  if (!file.exists(file)) {
+    stop("File not found: ", file)
+  }
+}
+
+tcga_genes_df <- readRDS(tcga_degs_file)
+res <- readRDS(tcga_res_file)
+essential_genes <- readRDS(essential_genes_file)
+shRNA_ds <- readRDS(shRNA_ds_file)
+
+# Section 2: Prepare gene sets
+tcga_genes <- tcga_genes_df$Symbol[!is.na(tcga_genes_df$Symbol)]
+lincs_genes <- sig_gene_symbols
+depmap_genes <- essential_genes$gene_symbol
+
+# Section 3: Venn Diagram
+if (length(tcga_genes) > 0 && length(lincs_genes) > 0 && length(depmap_genes) > 0) {
+  venn_data <- list(
+    TCGA = tcga_genes,
+    LINCS = lincs_genes,
+    DepMap = depmap_genes
+  )
+  ggVennDiagram::ggVennDiagram(
+    venn_data,
+    label_alpha = 0.5,
+    edge_size = 1,
+    set_size = 3,
+    label_size = 3
+  ) +
+    ggplot2::ggtitle("Overlap of TCGA, LINCS, and DepMap Genes") +
+    ggplot2::theme_minimal()
+} else {
+  cat("Cannot create Venn diagram: one or more gene sets are empty\n")
+}
+
+# Section 4: Volcano Plot with Candidate Genes Highlighted
 deg_data <- as.data.frame(res) %>%
   dplyr::mutate(
-    Gene = tcga_genes[match(rownames(res), tcga_degs_clean)],
-    Significant = !is.na(padj) & padj < 0.05 & abs(log2FoldChange) > 1
+    Gene = tcga_genes_df$Symbol[match(rownames(res), tcga_genes_df$Ensembl)],
+    Significant = !is.na(padj) & padj < 0.05 & abs(log2FoldChange) > 1,
+    Candidate = Gene %in% candidate_targets
   )
-
-# Section 2: Create volcano plot
 ggplot(deg_data, aes(x = log2FoldChange, y = -log10(padj), color = Significant)) +
   geom_point(size = 1, alpha = 0.5) +
+  geom_point(data = subset(deg_data, Candidate), color = "blue", size = 2) +
+  ggrepel::geom_text_repel(
+    data = subset(deg_data, Candidate),
+    aes(label = Gene),
+    max.overlaps = 20,
+    color = "blue",
+    size = 3
+  ) +
   scale_color_manual(values = c("grey50", "red")) +
   theme_minimal() +
   labs(
-    title = "Volcano Plot of TCGA-LUAD Differential Expression",
+    title = "Volcano Plot of TCGA-LUAD DEGs with Candidate Targets",
     x = "Log2 Fold Change (Tumor vs. Normal)",
     y = "-Log10 Adjusted P-value",
     color = "Significant (padj < 0.05, |log2FC| > 1)"
   ) +
-  theme(legend.position = "top")}
+  theme(legend.position = "top")
+
+# Section 5: Heatmap of LINCS shRNA Z-Scores
+if (length(candidate_targets) > 0) {
+  candidate_indices <- match(candidate_targets, shRNA_ds@rdesc$pr_gene_symbol)
+  candidate_indices <- candidate_indices[!is.na(candidate_indices)]
+  if (length(candidate_indices) > 0) {
+    z_score_matrix <- shRNA_ds@mat[candidate_indices, , drop = FALSE]
+    pheatmap::pheatmap(
+      z_score_matrix,
+      main = "LINCS shRNA Z-Scores for Candidate Target Genes",
+      cluster_rows = TRUE,
+      cluster_cols = TRUE,
+      show_rownames = TRUE,
+      show_colnames = FALSE,
+      fontsize_row = 8,
+      color = colorRampPalette(c("blue", "white", "red"))(50),
+      breaks = seq(-3, 3, length.out = 51)
+    )
+  } else {
+    cat("Cannot create heatmap: no candidate targets match shRNA data\n")
+  }
+} else {
+  cat("Cannot create heatmap: no candidate target genes\n")
+}
+
+# Section 6: Bar Plot of DepMap Essentiality
+if (nrow(essential_genes) > 0) {
+  bar_data <- essential_genes %>%
+    dplyr::mutate(Candidate = gene_symbol %in% candidate_targets) %>%
+    dplyr::arrange(desc(prop_essential)) %>%
+    dplyr::slice_head(n = 20)  # Limit to top 20 for clarity
+  ggplot(bar_data, aes(x = reorder(gene_symbol, prop_essential), y = prop_essential, fill = Candidate)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    scale_fill_manual(values = c("grey50", "blue")) +
+    theme_minimal() +
+    labs(
+      title = "Top 20 Essential Genes in LUAD Cell Lines",
+      x = "Gene Symbol",
+      y = "Proportion of LUAD Cell Lines (CERES < -0.5)",
+      fill = "Candidate Target"
+    ) +
+    theme(legend.position = "top")
+} else {
+  cat("Cannot create bar plot: no essential genes available\n")
+}
+
+# Section 7: UpSet Plot
+if (length(tcga_genes) > 0 && length(lincs_genes) > 0 && length(depmap_genes) > 0) {
+  upset_data <- list(
+    TCGA = tcga_genes,
+    LINCS = lincs_genes,
+    DepMap = depmap_genes
+  )
+  UpSetR::upset(
+    UpSetR::fromList(upset_data),
+    sets = c("TCGA", "LINCS", "DepMap"),
+    order.by = "freq",
+    text.scale = 1.5,
+    mainbar.y.label = "Number of Genes in Intersection",
+    sets.x.label = "Number of Genes"
+  )
+} else {
+  cat("Cannot create UpSet plot: one or more gene sets are empty\n")
+}
 ```
 
