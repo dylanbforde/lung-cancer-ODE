@@ -327,3 +327,85 @@ c_index <- concordance.index(x = risk_score,
                              method = "noether")
 c_index$c.index
 ```
+
+6.  Model Performance Evaluation
+```{r}
+#| message: false
+#| warning: false
+cat("\nEvaluating model performance...\n")
+
+# Alternative C-index calculation function
+calculate_cindex <- function(risk_scores, time, status) {
+  # Create all pairs of observations
+  n <- length(risk_scores)
+  concordant <- 0
+  discordant <- 0
+  tied <- 0
+
+  for (i in 1:(n-1)) {
+    for (j in (i+1):n) {
+      # Only consider pairs where we can determine order
+      if (status[i] == 1 || status[j] == 1) {
+        # If both have events, use the one with shorter time
+        if (status[i] == 1 && status[j] == 1) {
+          if (time[i] < time[j]) {
+            if (risk_scores[i] > risk_scores[j]) concordant <- concordant + 1
+            else if (risk_scores[i] < risk_scores[j]) discordant <- discordant + 1
+            else tied <- tied + 1
+          } else if (time[i] > time[j]) {
+            if (risk_scores[i] < risk_scores[j]) concordant <- concordant + 1
+            else if (risk_scores[i] > risk_scores[j]) discordant <- discordant + 1
+            else tied <- tied + 1
+          }
+        }
+        # If only one has event, compare with censored
+        else if (status[i] == 1 && status[j] == 0 && time[i] < time[j]) {
+          if (risk_scores[i] > risk_scores[j]) concordant <- concordant + 1
+          else if (risk_scores[i] < risk_scores[j]) discordant <- discordant + 1
+          else tied <- tied + 1
+        } else if (status[i] == 0 && status[j] == 1 && time[j] < time[i]) {
+          if (risk_scores[j] > risk_scores[i]) concordant <- concordant + 1
+          else if (risk_scores[j] < risk_scores[i]) discordant <- discordant + 1
+          else tied <- tied + 1
+        }
+      }
+    }
+  }
+
+  # Calculate C-index
+  c_index <- (concordant + 0.5 * tied) / (concordant + discordant + tied)
+  return(c_index)
+}
+
+# Try to use survcomp if available, otherwise use our function
+if (requireNamespace("survcomp", quietly = TRUE)) {
+  c_index <- survcomp::concordance.index(
+    x = risk_score,
+    surv.time = combine_risk$time,
+    surv.event = combine_risk$status,
+    method = "noether"
+  )$c.index
+} else {
+  c_index <- calculate_cindex(as.numeric(risk_score), combine_risk$time, combine_risk$status)
+}
+
+cat("C-index:", round(c_index, 3), "\n")
+
+# Bootstrap validation
+set.seed(2025)
+bootstrap_cindex <- replicate(100, {
+  boot_idx <- sample(nrow(combine_risk), replace = TRUE)
+  boot_data <- combine_risk[boot_idx, ]
+
+  if (requireNamespace("survcomp", quietly = TRUE)) {
+    survcomp::concordance.index(boot_data$risk_score, boot_data$time,
+                                boot_data$status, method = "noether")$c.index
+  } else {
+    calculate_cindex(boot_data$risk_score, boot_data$time, boot_data$status)
+  }
+})
+
+cat("Bootstrap C-index:", round(mean(bootstrap_cindex), 3), "±",
+    round(sd(bootstrap_cindex), 3), "\n")
+
+```
