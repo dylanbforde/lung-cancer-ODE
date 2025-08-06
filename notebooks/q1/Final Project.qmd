@@ -328,7 +328,7 @@ c_index <- concordance.index(x = risk_score,
 c_index$c.index
 ```
 
-6.  Model Performance Evaluation
+#### 6.  Model Performance Evaluation
 ```{r}
 #| message: false
 #| warning: false
